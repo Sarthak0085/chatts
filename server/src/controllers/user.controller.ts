@@ -42,17 +42,21 @@ export const createUser = catchAsyncError(async (req: Request, res: Response, ne
 // Login user and save token in cookie
 export const loginUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   const { email, password } = req.body;
+  console.log(email, password);
+  try {
+    const user = await User.findOne({ email }).select("+password");
 
-  const user = await User.findOne({ email }).select("+password");
+    if (!user) return next(new ErrorHandler("Invalid Email and Password", 404));
 
-  if (!user) return next(new ErrorHandler("Invalid Email and Password", 404));
+    const isMatch = await compare(password, user.password);
 
-  const isMatch = await compare(password, user.password);
+    if (!isMatch)
+      return next(new ErrorHandler("Invalid Email and Password", 404));
 
-  if (!isMatch)
-    return next(new ErrorHandler("Invalid Email and Password", 404));
-
-  sendToken(res, user, 200, `Welcome Back, ${user.username}`);
+    sendToken(res, user, 200, `Welcome Back, ${user.username}`);
+  } catch (error: any) {
+    return next(new ErrorHandler(error.message, 500));
+  }
 });
 
 // get user data
@@ -133,6 +137,7 @@ export const sendFriendRequest = catchAsyncError(async (req: Request, res: Respo
 });
 
 export const acceptFriendRequest = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+  console.log(req.body);
   const { requestId, accept } = req.body;
 
   const request = await RequestModal.findById(requestId)
@@ -141,8 +146,6 @@ export const acceptFriendRequest = catchAsyncError(async (req: Request, res: Res
     .exec();
 
   if (!request) return next(new ErrorHandler("Request not found", 404));
-
-  // const typedRequest = request as Request;
 
   if (request.receiver._id.toString() !== req.user?.toString())
     return next(

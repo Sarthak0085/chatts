@@ -7,6 +7,7 @@ import { ErrorHandler } from "../utils/errorHandler";
 import User from "../models/user.model";
 import { deleteFilesFromCloudinary, uploadFilesToCloudinary } from "../utils/features";
 import Message from "../models/message.model";
+import { NEW_MESSAGE } from "../constants/events";
 
 export const newGroupChat = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const { name, members } = req.body;
@@ -44,31 +45,26 @@ export const getMyChats = catchAsyncError(async (req: Request, res: Response, ne
         .populate({ path: "members.user", select: "username avatar" })
         .exec();
 
-    console.log("Before Populate : ", chats);
+    // console.log("Before Populate : ", chats);
 
     // const populatedChats = await Chat.populate(chats, )
 
-    console.log("After Populate: ", chats[0].members);
+    // console.log("After Populate: ", chats[0].members);
 
     const transformedChats = chats.map((chat: any) => {
         // console.log("chat:", chat);
         const otherMember = getOtherMember(chat.members, req.user as UserType);
-        console.log("member", otherMember);
-        console.log("Returning Data: ", chat._id, chat.groupChat, chat.name, otherMember?.username)
+        // console.log("member", otherMember?.user?.avatar.url);
+        // console.log("Returning Data: ", chat._id, chat.groupChat, chat.name, otherMember?.username)
 
         return {
             _id: chat._id,
             groupChat: chat.groupChat,
             avatar: chat.groupChat
                 ? chat.members?.slice(0, 3).map(({ user }: { user: User }) => user.avatar?.url)
-                : [otherMember?.avatar?.url],
+                : [otherMember.user.avatar?.url],
             name: chat.groupChat ? chat.name : otherMember?.user?.username,
-            members: chat.members?.reduce((prev: any[], curr: any) => {
-                if (curr.user && curr.user?._id?.toString() !== req.user) {
-                    prev.push(curr.user?._id);
-                }
-                return prev;
-            }, []),
+            members: chat.members,
         };
     });
 
@@ -92,6 +88,7 @@ export const getMyGroups = catchAsyncError(async (req: Request, res: Response, n
         groupChat: chat.groupChat,
         name: chat.name,
         avatar: chat.members?.slice(0, 3).map(({ user }: { user: User }) => user.avatar?.url),
+        members: chat.members
     }));
 
     return res.status(200).json({
@@ -159,10 +156,6 @@ export const addMembers = catchAsyncError(async (req: Request, res: Response, ne
 export const removeMember = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const { userId, chatId } = req.body;
 
-    // const [chat, userThatWillBeRemoved] = await Promise.all([
-    //     Chat.findById(chatId),
-    //     User.findById(userId, "name"),
-    // ]);
     const chat = await Chat.findById(chatId);
     const userToBeRemoved = await User.findById(userId, "username");
 
@@ -249,7 +242,7 @@ export const leaveGroup = catchAsyncError(async (req: Request, res: Response, ne
 });
 
 export const sendAttachments = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
-    const { chatId } = req.body;
+    const { chatId, content = "" } = req.body;
 
     const files = req.files || [];
 
@@ -258,11 +251,6 @@ export const sendAttachments = catchAsyncError(async (req: Request, res: Respons
 
     if (Number(files.length) > 5)
         return next(new ErrorHandler("Files Can't be more than 5", 400));
-
-    // const [chat, me] = await Promise.all([
-    //     Chat.findById(chatId),
-    //     User.findById(req.user, "name"),
-    // ]);
 
     const chat = await Chat.findById(chatId);
     const user = await User.findById(req.user, "username");
@@ -275,7 +263,7 @@ export const sendAttachments = catchAsyncError(async (req: Request, res: Respons
     const attachments = await uploadFilesToCloudinary({ files: files as any, userId: user?._id });
 
     const messageForDB = {
-        content: "",
+        content: content,
         attachments,
         sender: user._id,
         chat: chatId,
@@ -312,16 +300,6 @@ export const getChatDetails = catchAsyncError(async (req: Request, res: Response
             .lean();
 
         if (!chat) return next(new ErrorHandler("Chat not found", 404));
-
-        if (typeof chat.members !== "undefined" && chat.members) {
-            //@ts-ignore
-            chat.members = chat.members.map((m: any) => ({
-                _id: m.user._id,
-                username: m.user?.username,
-                avatar: m.user.avatar?.url,
-                ...m
-            }));
-        }
 
         return res.status(200).json({
             success: true,
@@ -477,16 +455,16 @@ export const togglePinChat = catchAsyncError(async (req: Request, res: Response,
         }
 
         // Toggle the pinned status for the user
-        chat.members[userIndex].pinned = !chat.members[userIndex].pinned;
+        chat.members[userIndex].isPinned = !chat.members[userIndex].isPinned;
 
         await chat.save();
 
-        const pinStatus = chat.members[userIndex].pinned ? 'pinned' : 'unpinned';
+        const pinStatus = chat.members[userIndex].isPinned ? 'pinned' : 'unpinned';
 
         return res.status(200).json({
             success: true,
             message: `Chat ${pinStatus} successfully`,
-            pinned: chat.members[userIndex].pinned,
+            isPinned: chat.members[userIndex].isPinned,
         });
     } catch (error) {
         return next(new Error('Could not toggle pin status'));
@@ -510,16 +488,16 @@ export const toggleArchiveChat = catchAsyncError(async (req: Request, res: Respo
         }
 
         // Toggle the archieve status for the user
-        chat.members[userIndex].archieved = !chat.members[userIndex].archieved;
+        chat.members[userIndex].isArchieved = !chat.members[userIndex].isArchieved;
 
         await chat.save();
 
-        const archieveStatus = chat.members[userIndex].archieved ? 'archieved' : 'unarchieved';
+        const archieveStatus = chat.members[userIndex].isArchieved ? 'archieved' : 'unarchieved';
 
         return res.status(200).json({
             success: true,
             message: `Chat ${archieveStatus} successfully`,
-            archieved: chat.members[userIndex].archieved,
+            isArchieved: chat.members[userIndex].isArchieved,
         });
     } catch (error) {
         return next(new Error('Could not toggle archieved status'));
@@ -543,19 +521,56 @@ export const toggleMutedChat = catchAsyncError(async (req: Request, res: Respons
         }
 
         // Toggle the mute status for the user
-        chat.members[userIndex].muted = !chat.members[userIndex].muted;
+        chat.members[userIndex].isMuted = !chat.members[userIndex].isMuted;
 
         await chat.save();
 
-        const mutedStatus = chat.members[userIndex].muted ? 'Muted' : 'Unmuted';
+        const mutedStatus = chat.members[userIndex].isMuted ? 'Muted' : 'Unmuted';
 
         return res.status(200).json({
             success: true,
             message: `Chat ${mutedStatus} successfully`,
-            archieved: chat.members[userIndex].muted,
+            isMuted: chat.members[userIndex].isMuted,
         });
     } catch (error) {
         return next(new Error('Could not toggle muted status'));
+    }
+});
+
+export const toggleBlockedChat = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+    const chatId = req.params.id;
+
+    try {
+        const chat = await Chat.findById(chatId);
+
+        if (!chat || !chat.members) {
+            return next(new ErrorHandler("Chat not found", 404));
+        }
+
+        if (chat.groupChat === true) {
+            return next(new ErrorHandler("Blocking Groups are not allowed", 400));
+        }
+
+        const userIndex = chat.members.findIndex(member => member.user.toString() === req.user?.toString());
+
+        if (userIndex === -1) {
+            return next(new ErrorHandler("You are not a member of this chat", 403));
+        }
+
+        // Toggle the mute status for the user
+        chat.members[userIndex].isBlocked = !chat.members[userIndex].isBlocked;
+
+        await chat.save();
+
+        const mutedStatus = chat.members[userIndex].isMuted ? 'Blocked' : 'UnBlocked';
+
+        return res.status(200).json({
+            success: true,
+            message: `Chat ${mutedStatus} successfully`,
+            isBlocked: chat.members[userIndex].isBlocked,
+        });
+    } catch (error: any) {
+        return next(new ErrorHandler(error?.message, 500));
     }
 });
 
@@ -563,7 +578,7 @@ export const toggleMutedChat = catchAsyncError(async (req: Request, res: Respons
 export const getMyPinnedChats = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const chats = await Chat.find({
         "members.user": req.user,
-        "members.pinned": true
+        "members.isPinned": true
     })
         .populate({ path: "members.user", select: "username avatar" })
         .exec();
@@ -585,12 +600,7 @@ export const getMyPinnedChats = catchAsyncError(async (req: Request, res: Respon
                 ? chat.members?.slice(0, 3).map(({ user }: { user: User }) => user.avatar?.url)
                 : [otherMember?.avatar?.url],
             name: chat.groupChat ? chat.name : otherMember?.user?.username,
-            members: chat.members?.reduce((prev: any[], curr: any) => {
-                if (curr.user && curr.user?._id?.toString() !== req.user) {
-                    prev.push(curr.user?._id);
-                }
-                return prev;
-            }, []),
+            members: chat?.members
         };
     });
 
@@ -603,7 +613,7 @@ export const getMyPinnedChats = catchAsyncError(async (req: Request, res: Respon
 export const getMyArchievedChats = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const chats = await Chat.find({
         "members.user": req.user,
-        "members.archieved": true
+        "members.isArchieved": true
     })
         .populate({ path: "members.user", select: "username avatar" })
         .exec();
@@ -624,12 +634,7 @@ export const getMyArchievedChats = catchAsyncError(async (req: Request, res: Res
                 ? chat.members?.slice(0, 3).map(({ user }: { user: User }) => user.avatar?.url)
                 : [otherMember?.avatar?.url],
             name: chat.groupChat ? chat.name : otherMember?.user?.username,
-            members: chat.members?.reduce((prev: any[], curr: any) => {
-                if (curr.user && curr.user?._id?.toString() !== req.user) {
-                    prev.push(curr.user?._id);
-                }
-                return prev;
-            }, []),
+            members: chat.members,
         };
     });
 
@@ -643,7 +648,7 @@ export const getMyArchievedChats = catchAsyncError(async (req: Request, res: Res
 export const getMyMutedChats = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const chats = await Chat.find({
         "members.user": req.user,
-        "members.muted": true
+        "members.isMuted": true
     })
         .populate({ path: "members.user", select: "username avatar" })
         .exec();
@@ -664,12 +669,43 @@ export const getMyMutedChats = catchAsyncError(async (req: Request, res: Respons
                 ? chat.members?.slice(0, 3).map(({ user }: { user: User }) => user.avatar?.url)
                 : [otherMember?.avatar?.url],
             name: chat.groupChat ? chat.name : otherMember?.user?.username,
-            members: chat.members?.reduce((prev: any[], curr: any) => {
-                if (curr.user && curr.user?._id?.toString() !== req.user) {
-                    prev.push(curr.user?._id);
-                }
-                return prev;
-            }, []),
+            members: chat.members,
+        };
+    });
+
+
+    return res.status(200).json({
+        success: true,
+        chats: transformedChats,
+    });
+});
+
+export const getMyBlockedChats = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+    const chats = await Chat.find({
+        "members.user": req.user,
+        "members.isBlocked": true,
+        "groupChat": false,
+    })
+        .populate({ path: "members.user", select: "username avatar" })
+        .exec();
+
+
+    if (chats.length < 1) {
+        return next(new ErrorHandler("You haven't Muted any Chat Yet.", 400));
+    }
+
+
+    const transformedChats = chats.map((chat: any) => {
+        const otherMember = getOtherMember(chat?.members, req.user as UserType);
+
+        return {
+            _id: chat?._id,
+            groupChat: chat?.groupChat,
+            avatar: chat?.groupChat
+                ? chat.members?.slice(0, 3).map(({ user }: { user: User }) => user.avatar?.url)
+                : [otherMember?.avatar?.url],
+            name: chat.groupChat ? chat.name : otherMember?.user?.username,
+            members: chat.members,
         };
     });
 
