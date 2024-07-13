@@ -6,18 +6,15 @@ const messageSchema = new Schema<MessageInterface>({
     type: String,
   },
   attachments: [{
-    // type: {
-    //   type: String,
-    //   enum: ['image', 'audio', 'video', 'document', 'emoji', 'sticker'],
-    //   required: true,
-    // },
+    type: {
+      type: String,
+      enum: ['image', 'audio', 'video', 'document', 'sticker'],
+    },
     public_id: {
       type: String,
-      required: true,
     },
     url: {
       type: String,
-      required: true,
     },
   }],
   sender: {
@@ -25,7 +22,7 @@ const messageSchema = new Schema<MessageInterface>({
     ref: 'User',
     required: true,
   },
-  chat: {
+  chatId: {
     type: Schema.Types.ObjectId,
     ref: 'Chat',
     required: true,
@@ -46,6 +43,9 @@ const messageSchema = new Schema<MessageInterface>({
     type: Boolean,
     default: false,
   },
+  reactions: {
+    type: String,
+  }
 }, {
   timestamps: true,
 });

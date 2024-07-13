@@ -20,24 +20,24 @@ const chatSchema = new Schema<ChatInterface>({
         type: Types.ObjectId,
         ref: "User",
       },
-      pinned: {
+      isPinned: {
         type: Boolean,
         default: false
       },
-      archieved: {
+      isArchieved: {
         type: Boolean,
         default: false
       },
-      muted: {
+      isMuted: {
         type: Boolean,
         default: false,
       },
+      isBlocked: {
+        type: Boolean,
+        default: false,
+      }
     }
   ],
-  mutedUsers: [{
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-  }],
 }, {
   timestamps: true,
 });

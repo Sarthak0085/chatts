@@ -20,7 +20,7 @@ const userSchema = new Schema<UserInterface>({
     },
     bio: {
         type: String,
-        default: "I am using chat-app 🐱‍🚀",
+        default: "I am using chat-app 🦾🐱‍🚀",
     },
     password: {
         type: String,
