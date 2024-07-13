@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { isAuthenticated } from "../middlewares/auth";
 import { addMemberValidator, chatIdValidator, newGroupValidator, removeMemberValidator, renameValidator, sendAttachmentsValidator, validateHandler } from "../lib/validators";
-import { addMembers, getChatDetails, getMessages, getMyArchievedChats, getMyChats, getMyGroups, getMyMutedChats, getMyPinnedChats, leaveGroup, newGroupChat, removeMember, renameGroup, sendAttachments, toggleArchiveChat, toggleMutedChat, togglePinChat } from "../controllers/chat.controller";
+import { addMembers, getChatDetails, getMessages, getMyArchievedChats, getMyBlockedChats, getMyChats, getMyGroups, getMyMutedChats, getMyPinnedChats, leaveGroup, newGroupChat, removeMember, renameGroup, sendAttachments, toggleArchiveChat, toggleBlockedChat, toggleMutedChat, togglePinChat } from "../controllers/chat.controller";
 import { attachmentsMulter } from "../middlewares/multer";
 
 const chatRouter = Router();
@@ -16,6 +16,8 @@ chatRouter.get("/my/groups", getMyGroups);
 
 chatRouter.get("/mypinchats", getMyPinnedChats);
 
+chatRouter.get("/myblockChats", getMyBlockedChats);
+
 chatRouter.get("/myarchievechats", getMyArchievedChats);
 
 chatRouter.get("/mymutechats", getMyMutedChats);
@@ -27,6 +29,8 @@ chatRouter.put("/pin/:id", chatIdValidator(), validateHandler, togglePinChat);
 chatRouter.put("/archieve/:id", chatIdValidator(), validateHandler, toggleArchiveChat);
 
 chatRouter.put("/mute/:id", chatIdValidator(), validateHandler, toggleMutedChat);
+
+chatRouter.put("/block/:id", chatIdValidator(), validateHandler, toggleBlockedChat);
 
 chatRouter.put(
     "/removemember",

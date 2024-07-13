@@ -111,7 +111,7 @@ const createMessagesInAChat = async (chatId: string, numMessages: number) => {
 
       messagesPromise.push(
         Message.create({
-          chat: chatId,
+          chatId: chatId,
           sender: randomUser,
           content: faker.lorem.sentence(),
         })

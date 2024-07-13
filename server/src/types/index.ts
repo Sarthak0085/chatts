@@ -25,9 +25,7 @@ export interface ChatInterface extends Document {
     name: string;
     groupChat?: boolean;
     creator: object;
-    members?: Array<{ user: Types.ObjectId | UserInterface, pinned: boolean, archieved: boolean; muted: boolean }>;
-    archived?: Array<Types.ObjectId | string>;
-    mutedUsers?: Array<Types.ObjectId | string>;
+    members?: Array<{ user: Types.ObjectId | UserInterface, isPinned: boolean, isArchieved: boolean; isMuted: boolean; isBlocked: boolean }>;
 }
 
 export interface MessageInterface {
@@ -38,11 +36,12 @@ export interface MessageInterface {
         url: string;
     }>;
     sender: Types.ObjectId | string;
-    chat: Types.ObjectId | string;
+    chatId: Types.ObjectId | string;
     isDelivered?: boolean;
     isRead?: boolean;
     isEdited?: boolean;
     isDeleted?: boolean;
+    reactions?: string;
 }
 
 export type User = {
