@@ -1,7 +1,8 @@
 import { v4 as uuid } from "uuid";
 import { v2 as cloudinary } from "cloudinary";
-import { getBase64 } from "../lib/helpers";
+import { getBase64, getSockets } from "../lib/helpers";
 import { ErrorHandler } from "./errorHandler";
+import { Request } from "express";
 
 interface File {
   mimetype: string;
@@ -24,6 +25,12 @@ type UploadFile = {
   email?: string;
   isAvatar?: boolean;
   userId?: string;
+}
+
+export const emitEvent = (req: Request, event: string, users: any, data?: any) => {
+  const io = req.app.get("io");
+  const usersSockets = getSockets(users as any);
+  io.to(usersSockets).emit(event, data);
 }
 
 export const uploadFilesToCloudinary = async ({ files, username, email, userId, isAvatar }: UploadFile): Promise<GetCloudinaryResult[] | undefined> => {

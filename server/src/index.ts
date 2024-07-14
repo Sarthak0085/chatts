@@ -4,7 +4,7 @@ import app from "./app";
 import connectToDB from "./lib/connectToDB";
 import { createServer } from "http";
 import { createUser } from "./seeders/user.seeder";
-import { createSingleChats } from "./seeders/chat.seeder";
+import { createMessages, createMessagesInAChat, createSingleChats } from "./seeders/chat.seeder";
 import { Server, Socket } from "socket.io";
 import { corsOptions } from "./constants/config";
 import cookieParser from "cookie-parser";
@@ -37,29 +37,30 @@ export const userSocketIDs: Map<string, string> = new Map();
 const onlineUsers: Set<string> = new Set();
 
 // createUser(10);
-
-// createSingleChats(10);
+// createSingleChats(5);
+// createMessages(10);
+// createMessagesInAChat("6692a9c06dc1b219cc50b2bc", 10)
 
 const server = createServer(app);
-const io = new Server(server, {}
-    //     {
-    //     cors: corsOptions as CorsOptions,
-    // }
+const io = new Server(server,
+    {
+        cors: corsOptions as CorsOptions,
+    }
 );
 
-// app.set("io", io);
+app.set("io", io);
 
 
 //@ts-ignore
-// io.use((socket: any, next: NextFunction) => {
-//     cookieParser()(socket.request as any, socket.request.res, async (err) => {
-//         if (err) {
-//             console.error('Error parsing cookies:', err);
-//             return next(err);
-//         }
-//         await socketAuthenticator(err, socket, next);
-//     });
-// });
+io.use((socket: any, next: NextFunction) => {
+    cookieParser()(socket.request as any, socket.request.res, async (err) => {
+        if (err) {
+            console.error('Error parsing cookies:', err);
+            return next(err);
+        }
+        await socketAuthenticator(err, socket, next);
+    });
+});
 
 io.on("connection", (socket: CustomSocket) => {
     console.log("connected");
@@ -87,18 +88,18 @@ io.on("connection", (socket: CustomSocket) => {
 
         console.log(messageForRealTime, messageForDB);
 
-        // const membersSocket = getSockets(members);
-        // io.to(membersSocket as unknown as string).emit(NEW_MESSAGE, {
-        //     chatId,
-        //     message: messageForRealTime,
-        // });
-        // io.to(membersSocket as unknown as string).emit(NEW_MESSAGE_ALERT, { chatId });
+        const membersSocket = getSockets(members);
+        io.to(membersSocket as unknown as string).emit(NEW_MESSAGE, {
+            chatId,
+            message: messageForRealTime,
+        });
+        io.to(membersSocket as unknown as string).emit(NEW_MESSAGE_ALERT, { chatId });
 
-        // try {
-        //     await Message.create(messageForDB);
-        // } catch (error: any) {
-        //     throw new Error(error.message);
-        // }
+        try {
+            await Message.create(messageForDB);
+        } catch (error: any) {
+            throw new Error(error.message);
+        }
     });
 
     socket.on(START_TYPING, ({ members, chatId }) => {
@@ -112,6 +113,7 @@ io.on("connection", (socket: CustomSocket) => {
     });
 
     socket.on(CHAT_JOINED, ({ userId, members }) => {
+        console.log("chat joined", members);
         onlineUsers.add(userId.toString());
 
         const membersSocket = getSockets(members);
