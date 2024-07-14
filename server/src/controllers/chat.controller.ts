@@ -5,9 +5,9 @@ import { getOtherMember } from "../lib/helpers";
 import { UserType } from "../middlewares/auth";
 import { ErrorHandler } from "../utils/errorHandler";
 import User from "../models/user.model";
-import { deleteFilesFromCloudinary, uploadFilesToCloudinary } from "../utils/features";
+import { deleteFilesFromCloudinary, emitEvent, uploadFilesToCloudinary } from "../utils/features";
 import Message from "../models/message.model";
-import { NEW_MESSAGE } from "../constants/events";
+import { ALERT, NEW_MESSAGE, NEW_MESSAGE_ALERT, REFETCH_CHATS } from "../constants/events";
 
 export const newGroupChat = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const { name, members } = req.body;
@@ -23,8 +23,8 @@ export const newGroupChat = catchAsyncError(async (req: Request, res: Response, 
         members: allMembers,
     });
 
-    // emitEvent(req, ALERT, allMembers, `Welcome to ${name} group`);
-    // emitEvent(req, REFETCH_CHATS, members);
+    emitEvent(req, ALERT, allMembers, `Welcome to ${name} group`);
+    emitEvent(req, REFETCH_CHATS, members);
 
     return res.status(201).json({
         success: true,
@@ -45,18 +45,8 @@ export const getMyChats = catchAsyncError(async (req: Request, res: Response, ne
         .populate({ path: "members.user", select: "username avatar" })
         .exec();
 
-    // console.log("Before Populate : ", chats);
-
-    // const populatedChats = await Chat.populate(chats, )
-
-    // console.log("After Populate: ", chats[0].members);
-
     const transformedChats = chats.map((chat: any) => {
-        // console.log("chat:", chat);
         const otherMember = getOtherMember(chat.members, req.user as UserType);
-        // console.log("member", otherMember?.user?.avatar.url);
-        // console.log("Returning Data: ", chat._id, chat.groupChat, chat.name, otherMember?.username)
-
         return {
             _id: chat._id,
             groupChat: chat.groupChat,
@@ -68,6 +58,54 @@ export const getMyChats = catchAsyncError(async (req: Request, res: Response, ne
         };
     });
 
+
+    return res.status(200).json({
+        success: true,
+        chats: transformedChats,
+    });
+});
+
+export const getMySingleChats = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+    const chats = await Chat.find({ "members.user": req.user, groupChat: false })
+        .populate({ path: "members.user", select: "username avatar" })
+        .exec();
+
+    const transformedChats = chats.map((chat: any) => {
+        const otherMember = getOtherMember(chat.members, req.user as UserType);
+        return {
+            _id: chat._id,
+            groupChat: chat.groupChat,
+            avatar: chat.groupChat
+                ? chat.members?.slice(0, 3).map(({ user }: { user: User }) => user.avatar?.url)
+                : [otherMember.user.avatar?.url],
+            name: chat.groupChat ? chat.name : otherMember?.user?.username,
+            members: chat.members,
+        };
+    });
+
+    return res.status(200).json({
+        success: true,
+        chats: transformedChats,
+    });
+});
+
+export const getAllNonBlockedAndArchievedChats = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+    const chats = await Chat.find({ "members.user": req.user, "members.isBlocked": false, "members.isArchieved": false })
+        .populate({ path: "members.user", select: "username avatar" })
+        .exec();
+
+    const transformedChats = chats.map((chat: any) => {
+        const otherMember = getOtherMember(chat.members, req.user as UserType);
+        return {
+            _id: chat._id,
+            groupChat: chat.groupChat,
+            avatar: chat.groupChat
+                ? chat.members?.slice(0, 3).map(({ user }: { user: User }) => user.avatar?.url)
+                : [otherMember.user.avatar?.url],
+            name: chat.groupChat ? chat.name : otherMember?.user?.username,
+            members: chat.members,
+        };
+    });
 
     return res.status(200).json({
         success: true,
@@ -138,14 +176,14 @@ export const addMembers = catchAsyncError(async (req: Request, res: Response, ne
 
     const allUsersName = allNewMembers.map((i) => i.username).join(", ");
 
-    // // emitEvent(
-    // //     req,
-    // //     ALERT,
-    // //     chat.members,
-    // //     `${allUsersName} has been added in the group`
-    // // );
+    emitEvent(
+        req,
+        ALERT,
+        chat.members,
+        `${allUsersName} has been added in the group`
+    );
 
-    // // emitEvent(req, REFETCH_CHATS, chat.members);
+    emitEvent(req, REFETCH_CHATS, chat.members);
 
     return res.status(200).json({
         success: true,
@@ -183,12 +221,12 @@ export const removeMember = catchAsyncError(async (req: Request, res: Response, 
 
     await chat.save();
 
-    // emitEvent(req, ALERT, chat.members, {
-    //     message: `${userToBeRemoved?.username} has been removed from the group`,
-    //     chatId,
-    // });
+    emitEvent(req, ALERT, chat.members, {
+        message: `${userToBeRemoved?.username} has been removed from the group`,
+        chatId,
+    });
 
-    // emitEvent(req, REFETCH_CHATS, allChatMembers);
+    emitEvent(req, REFETCH_CHATS, allChatMembers);
 
     return res.status(200).json({
         success: true,
@@ -225,15 +263,10 @@ export const leaveGroup = catchAsyncError(async (req: Request, res: Response, ne
     const user = await User.findById(req.user, "username");
     await chat.save();
 
-    // const [user] = await Promise.all([
-    //     User.findById(req.user, "name"),
-    //     chat.save(),
-    // ]);
-
-    // emitEvent(req, ALERT, chat.members, {
-    //     chatId,
-    //     message: `User ${user.username} has left the group`,
-    // });
+    emitEvent(req, ALERT, chat.members, {
+        chatId,
+        message: `User ${user?.username} has left the group`,
+    });
 
     return res.status(200).json({
         success: true,
@@ -279,12 +312,12 @@ export const sendAttachments = catchAsyncError(async (req: Request, res: Respons
 
     const message = await Message.create(messageForDB);
 
-    // emitEvent(req, NEW_MESSAGE, chat.members, {
-    //     message: messageForRealTime,
-    //     chatId,
-    // });
+    emitEvent(req, NEW_MESSAGE, chat.members, {
+        message: messageForRealTime,
+        chatId,
+    });
 
-    // emitEvent(req, NEW_MESSAGE_ALERT, chat.members, { chatId });
+    emitEvent(req, NEW_MESSAGE_ALERT, chat.members, { chatId });
 
     return res.status(200).json({
         success: true,
@@ -337,7 +370,7 @@ export const renameGroup = catchAsyncError(async (req: Request, res: Response, n
 
     await chat.save();
 
-    // emitEvent(req, REFETCH_CHATS, chat.members);
+    emitEvent(req, REFETCH_CHATS, chat.members);
 
     return res.status(200).json({
         success: true,
@@ -386,7 +419,7 @@ export const deleteChat = catchAsyncError(async (req: Request, res: Response, ne
         Message.deleteMany({ chat: chatId }),
     ]);
 
-    // emitEvent(req, REFETCH_CHATS, members);
+    emitEvent(req, REFETCH_CHATS, members);
 
     return res.status(200).json({
         success: true,
@@ -398,6 +431,8 @@ export const deleteChat = catchAsyncError(async (req: Request, res: Response, ne
 export const getMessages = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const chatId = req.params.id;
     const { page = 1 } = req.query;
+
+    console.log(chatId, page);
 
     const resultPerPage = 20;
     const skip = (Number(page) - 1) * resultPerPage;
@@ -411,23 +446,13 @@ export const getMessages = catchAsyncError(async (req: Request, res: Response, n
             new ErrorHandler("You are not allowed to access this chat", 403)
         );
 
-    // const [messages, totalMessagesCount] = await Promise.all([
-    //     Message.find({ chat: chatId })
-    //         .sort({ createdAt: -1 })
-    //         .skip(skip)
-    //         .limit(resultPerPage)
-    //         .populate("sender", "name")
-    //         .lean(),
-    //     Message.countDocuments({ chat: chatId }),
-    // ]);
-
-    const messages = await Message.find({ chat: chatId })
-        .sort({ createdAt: -1 })
+    const messages = await Message.find({ chatId: chatId })
+        .sort({ createdAt: 1 })
         .skip(skip)
         .limit(resultPerPage)
-        .populate("sender", "name")
+        .populate("sender", "username avatar _id")
         .lean();
-    const totalMessagesCount = await Message.countDocuments({ chat: chatId });
+    const totalMessagesCount = await Message.countDocuments({ chatId: chatId });
 
     const totalPages = Math.ceil(totalMessagesCount / resultPerPage) || 0;
 

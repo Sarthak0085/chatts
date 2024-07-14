@@ -128,7 +128,7 @@ export const sendFriendRequest = catchAsyncError(async (req: Request, res: Respo
     receiver: userId,
   });
 
-  // emitEvent(req, NEW_REQUEST, [userId]);
+  emitEvent(req, NEW_REQUEST, [userId]);
 
   return res.status(200).json({
     success: true,
@@ -171,12 +171,34 @@ export const acceptFriendRequest = catchAsyncError(async (req: Request, res: Res
     request.deleteOne(),
   ]);
 
-  // emitEvent(req, REFETCH_CHATS, members);
+  emitEvent(req, REFETCH_CHATS, members);
 
   return res.status(200).json({
     success: true,
     message: "Friend Request Accepted",
     senderId: request.sender._id,
+  });
+});
+
+export const getMyRequestsNotifications = catchAsyncError(async (req: Request, res: Response) => {
+  const requests = await RequestModal.find({ sender: req.user }).populate(
+    "receiver",
+    "username avatar"
+  );
+
+
+  const allRequests = requests.map(({ _id, receiver }) => ({
+    _id,
+    receiver: {
+      _id: receiver._id,
+      username: receiver.username,
+      avatar: receiver.avatar?.url,
+    },
+  }));
+
+  return res.status(200).json({
+    success: true,
+    allRequests,
   });
 });
 
