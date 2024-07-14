@@ -12,11 +12,15 @@ chatRouter.post("/new", newGroupValidator(), validateHandler, newGroupChat);
 
 chatRouter.get("/mychats", getMyChats);
 
+chatRouter.get("/mychats/single", getMyChats);
+
+chatRouter.get("/mychats/unblockedarchieved", getMyChats);
+
 chatRouter.get("/my/groups", getMyGroups);
 
 chatRouter.get("/mypinchats", getMyPinnedChats);
 
-chatRouter.get("/myblockChats", getMyBlockedChats);
+chatRouter.get("/myblockchats", getMyBlockedChats);
 
 chatRouter.get("/myarchievechats", getMyArchievedChats);
 

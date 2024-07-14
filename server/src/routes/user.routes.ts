@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { isAuthenticated } from "../middlewares/auth";
-import { acceptFriendRequest, getMyFriends, getMyNotifications, getMyProfile, logout, searchUser, sendFriendRequest } from "../controllers/user.controller";
+import { acceptFriendRequest, getMyFriends, getMyNotifications, getMyProfile, getMyRequestsNotifications, logout, searchUser, sendFriendRequest } from "../controllers/user.controller";
 import { acceptRequestValidator, sendRequestValidator, validateHandler } from "../lib/validators";
 
 const userRouter = Router();
@@ -29,6 +29,8 @@ userRouter.put(
 );
 
 userRouter.get("/notifications", getMyNotifications);
+
+userRouter.get("/requests", getMyRequestsNotifications);
 
 userRouter.get("/friends", getMyFriends);
 
