@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 import { UserType } from "../middlewares/auth";
 import { userSocketIDs } from "..";
+import { User } from "../types";
 
 interface Member {
     user: Types.ObjectId | string;
@@ -11,7 +12,7 @@ export const getOtherMember = (members: any, userId: UserType) =>
 
 
 export const getSockets = (users = []): (string | undefined)[] => {
-    const sockets = users.map((u: { user: string; }) => userSocketIDs.get(u.user.toString()));
+    const sockets = users?.map((u: { user: User }) => userSocketIDs.get(u?.user?._id?.toString()));
 
     return sockets;
 };

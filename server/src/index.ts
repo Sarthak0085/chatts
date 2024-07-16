@@ -73,20 +73,21 @@ io.on("connection", (socket: CustomSocket) => {
             content: message,
             _id: uuid(),
             sender: {
-                _id: user._id,
-                username: user.username,
+                _id: user?._id,
+                username: user?.username,
+                avatar: user?.avatar,
             },
-            chat: chatId,
+            chatId: chatId,
             createdAt: new Date().toISOString(),
         };
 
         const messageForDB = {
             content: message,
-            sender: user._id,
-            chat: chatId,
+            sender: user?._id,
+            chatId: chatId,
         };
 
-        console.log(messageForRealTime, messageForDB);
+        console.log("messageForRealTime", messageForRealTime, "messageForDB", messageForDB);
 
         const membersSocket = getSockets(members);
         io.to(membersSocket as unknown as string).emit(NEW_MESSAGE, {
