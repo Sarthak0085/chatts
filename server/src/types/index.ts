@@ -30,8 +30,8 @@ export interface ChatInterface extends Document {
 
 export interface MessageInterface {
     content?: string;
+    message_type: 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'EMOJI' | 'STICKER' | 'TEXT' | 'UNKNOWN'; // Type of attachment (e.g., 'image', 'audio', 'video', 'document', 'emoji', 'sticker')
     attachments?: Array<{
-        type: string; // Type of attachment (e.g., 'image', 'audio', 'video', 'document', 'emoji', 'sticker')
         public_id: string;
         url: string;
     }>;

@@ -5,11 +5,12 @@ const messageSchema = new Schema<MessageInterface>({
   content: {
     type: String,
   },
+  message_type: {
+    type: String,
+    enum: ['IMAGE', 'VIDEO', 'DOCUMENT', 'EMOJI', 'STICKER', 'TEXT', 'UNKNOWN'],
+    default: 'TEXT'
+  },
   attachments: [{
-    type: {
-      type: String,
-      enum: ['image', 'audio', 'video', 'document', 'sticker'],
-    },
     public_id: {
       type: String,
     },
