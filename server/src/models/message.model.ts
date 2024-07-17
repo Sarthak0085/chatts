@@ -7,7 +7,7 @@ const messageSchema = new Schema<MessageInterface>({
   },
   message_type: {
     type: String,
-    enum: ['IMAGE', 'VIDEO', 'DOCUMENT', 'EMOJI', 'STICKER', 'TEXT', 'UNKNOWN'],
+    enum: ['IMAGE', 'VIDEO', 'DOCUMENT', 'EMOJI', 'STICKER', 'TEXT', 'UNKNOWN', 'ACTION'],
     default: 'TEXT'
   },
   attachments: [{
@@ -17,6 +17,9 @@ const messageSchema = new Schema<MessageInterface>({
     url: {
       type: String,
     },
+    caption: {
+      type: String,
+    }
   }],
   sender: {
     type: Schema.Types.ObjectId,

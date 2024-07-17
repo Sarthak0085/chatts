@@ -26,6 +26,13 @@ chatRouter.get("/myarchievechats", getMyArchievedChats);
 
 chatRouter.get("/mymutechats", getMyMutedChats);
 
+// Send Attachments
+chatRouter.post(
+    "/message",
+    attachmentsMulter,
+    sendAttachments
+);
+
 chatRouter.put("/addmembers", addMemberValidator(), validateHandler, addMembers);
 
 chatRouter.put("/pin/:id", chatIdValidator(), validateHandler, togglePinChat);
@@ -44,15 +51,6 @@ chatRouter.put(
 );
 
 chatRouter.delete("/leave/:id", chatIdValidator(), validateHandler, leaveGroup);
-
-// Send Attachments
-chatRouter.post(
-    "/message",
-    attachmentsMulter,
-    sendAttachmentsValidator(),
-    validateHandler,
-    sendAttachments
-);
 
 // // Get Messages
 chatRouter.get("/message/:id", chatIdValidator(), validateHandler, getMessages);
