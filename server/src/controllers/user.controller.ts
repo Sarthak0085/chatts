@@ -4,7 +4,7 @@ import { catchAsyncError } from "../middlewares/catchAsyncErrors";
 import { ErrorHandler } from "../utils/errorHandler";
 import User from "../models/user.model";
 import { cookieOptions, sendToken } from "../utils/sendToken";
-import { uploadFilesToCloudinary } from "../utils/features";
+import { emitEvent, uploadFilesToCloudinary } from "../utils/features";
 import { compare } from "bcrypt";
 import { CHATTS_TOKEN } from "../constants/config";
 import Chat from "../models/chat.model";
@@ -119,8 +119,6 @@ export const sendFriendRequest = catchAsyncError(async (req: Request, res: Respo
     ],
   });
 
-  // console.log(request);
-
   if (request) return next(new ErrorHandler("Request already sent", 400));
 
   await RequestModal.create({
@@ -141,8 +139,8 @@ export const acceptFriendRequest = catchAsyncError(async (req: Request, res: Res
   const { requestId, accept } = req.body;
 
   const request = await RequestModal.findById(requestId)
-    .populate("sender", "username")
-    .populate("receiver", "username")
+    .populate("sender", "username avatar bio")
+    .populate("receiver", "username avatar bio")
     .exec();
 
   if (!request) return next(new ErrorHandler("Request not found", 404));
@@ -183,7 +181,7 @@ export const acceptFriendRequest = catchAsyncError(async (req: Request, res: Res
 export const getMyRequestsNotifications = catchAsyncError(async (req: Request, res: Response) => {
   const requests = await RequestModal.find({ sender: req.user }).populate(
     "receiver",
-    "username avatar"
+    "username avatar bio"
   );
 
 
@@ -205,7 +203,7 @@ export const getMyRequestsNotifications = catchAsyncError(async (req: Request, r
 export const getMyNotifications = catchAsyncError(async (req: Request, res: Response) => {
   const requests = await RequestModal.find({ receiver: req.user }).populate(
     "sender",
-    "username avatar"
+    "username avatar bio"
   );
 
 
@@ -230,7 +228,7 @@ export const getMyFriends = catchAsyncError(async (req: Request, res: Response) 
   const chats = await Chat.find({
     "members.user": req.user,
     groupChat: false,
-  }).populate("members.user", "username avatar");
+  }).populate("members.user", "username avatar bio");
 
   const friends = chats.map(({ members }) => {
     const otherUser = getOtherMember(members, req.user);

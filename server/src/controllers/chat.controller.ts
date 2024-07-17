@@ -42,7 +42,7 @@ interface User {
 
 export const getMyChats = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const chats = await Chat.find({ "members.user": req.user })
-        .populate({ path: "members.user", select: "username avatar" })
+        .populate({ path: "members.user", select: "username avatar bio" })
         .exec();
 
     const transformedChats = chats.map((chat: any) => {
@@ -55,6 +55,7 @@ export const getMyChats = catchAsyncError(async (req: Request, res: Response, ne
                 : [otherMember.user.avatar?.url],
             name: chat.groupChat ? chat.name : otherMember?.user?.username,
             members: chat.members,
+            creator: chat?.creator
         };
     });
 
@@ -67,7 +68,7 @@ export const getMyChats = catchAsyncError(async (req: Request, res: Response, ne
 
 export const getMySingleChats = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const chats = await Chat.find({ "members.user": req.user, groupChat: false })
-        .populate({ path: "members.user", select: "username avatar" })
+        .populate({ path: "members.user", select: "username avatar bio" })
         .exec();
 
     const transformedChats = chats.map((chat: any) => {
@@ -80,6 +81,7 @@ export const getMySingleChats = catchAsyncError(async (req: Request, res: Respon
                 : [otherMember.user.avatar?.url],
             name: chat.groupChat ? chat.name : otherMember?.user?.username,
             members: chat.members,
+            creator: chat?.creator,
         };
     });
 
@@ -91,7 +93,7 @@ export const getMySingleChats = catchAsyncError(async (req: Request, res: Respon
 
 export const getAllNonBlockedAndArchievedChats = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const chats = await Chat.find({ "members.user": req.user, "members.isBlocked": false, "members.isArchieved": false })
-        .populate({ path: "members.user", select: "username avatar" })
+        .populate({ path: "members.user", select: "username avatar bio" })
         .exec();
 
     const transformedChats = chats.map((chat: any) => {
@@ -104,6 +106,7 @@ export const getAllNonBlockedAndArchievedChats = catchAsyncError(async (req: Req
                 : [otherMember.user.avatar?.url],
             name: chat.groupChat ? chat.name : otherMember?.user?.username,
             members: chat.members,
+            creator: chat?.creator,
         };
     });
 
@@ -118,15 +121,15 @@ export const getMyGroups = catchAsyncError(async (req: Request, res: Response, n
     const chats = await Chat.find({
         "members.user": req.user,
         groupChat: true,
-        creator: req.user,
-    }).populate("members.user", "username avatar");
+    }).populate("members.user", "username avatar bio");
 
     const groups = chats.map((chat: any) => ({
         _id: chat._id,
         groupChat: chat.groupChat,
         name: chat.name,
         avatar: chat.members?.slice(0, 3).map(({ user }: { user: User }) => user.avatar?.url),
-        members: chat.members
+        members: chat.members,
+        creator: chat?.creator,
     }));
 
     return res.status(200).json({
@@ -145,19 +148,21 @@ export const addMembers = catchAsyncError(async (req: Request, res: Response, ne
     if (!chat.groupChat)
         return next(new ErrorHandler("This is not a group chat", 400));
 
-    if (!req.user) {
+    const user = await User.findById(req?.user);
+
+    if (!user) {
         return next(new ErrorHandler("Please login to do this", 400));
     }
 
 
     if (typeof chat !== "undefined" && chat.creator?.toString() !== req.user?.toString())
-        return next(new ErrorHandler("You are not allowed to add members", 403));
+        return next(new ErrorHandler("Only Group Admin is allowed to add members", 403));
 
     const allNewMembersPromise = members.map((i: string) => User.findById(i, "username"));
 
     const allNewMembers = await Promise.all(allNewMembersPromise);
 
-    const existingMember = allNewMembers.find(member => chat.members?.some(existing => existing.user.toString() === member._id.toString()));
+    const existingMember = allNewMembers.find(member => chat.members?.some(existing => existing.user?._id?.toString() === member?._id.toString()));
 
     console.log(allNewMembers);
 
@@ -176,23 +181,37 @@ export const addMembers = catchAsyncError(async (req: Request, res: Response, ne
 
     const allUsersName = allNewMembers.map((i) => i.username).join(", ");
 
-    emitEvent(
-        req,
-        ALERT,
-        chat.members,
-        `${allUsersName} has been added in the group`
-    );
+    const messageForRealTime = {
+        content: `${allUsersName} has been added in the group`,
+        chatId: chatId,
+        message_type: "ACTION",
+        sender: {
+            _id: user?._id,
+            username: user?.username,
+            avatar: user?.avatar,
+        },
+        createdAt: new Date().toISOString(),
+    }
+
+    emitEvent(req, NEW_MESSAGE, chat.members, {
+        chatId,
+        message: messageForRealTime,
+    });
+
+    await Message.create(messageForRealTime);
 
     emitEvent(req, REFETCH_CHATS, chat.members);
 
     return res.status(200).json({
         success: true,
-        message: "Members added successfully",
+        message: `${allUsersName} Members added successfully`,
     });
 });
 
 export const removeMember = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     const { userId, chatId } = req.body;
+
+    const user2 = await User.findById(req.user);
 
     const chat = await Chat.findById(chatId);
     const userToBeRemoved = await User.findById(userId, "username");
@@ -207,7 +226,7 @@ export const removeMember = catchAsyncError(async (req: Request, res: Response, 
         return next(new ErrorHandler("This is not a group chat", 400));
 
     if (chat.creator?.toString() !== req.user?.toString())
-        return next(new ErrorHandler("You are not allowed to add members", 403));
+        return next(new ErrorHandler("Only Group Admin are allowed to Remove members", 403));
 
     if (typeof chat.members !== "undefined" && chat.members.length <= 3)
         return next(new ErrorHandler("Group must have at least 3 members", 400));
@@ -218,13 +237,31 @@ export const removeMember = catchAsyncError(async (req: Request, res: Response, 
         (member) => member.user.toString() !== userId.toString()
     );
 
-
     await chat.save();
 
-    emitEvent(req, ALERT, chat.members, {
-        message: `${userToBeRemoved?.username} has been removed from the group`,
+    const messageForRealTime = {
+        content: `${userToBeRemoved?.username} has been removed from the group`,
+        chatId: chatId,
+        message_type: "ACTION",
+        sender: {
+            _id: user2?._id,
+            username: user2?.username,
+            avatar: user2?.avatar,
+        },
+        createdAt: new Date().toISOString(),
+    }
+
+    emitEvent(req, NEW_MESSAGE, chat.members, {
         chatId,
+        message: messageForRealTime,
     });
+
+    await Message.create(messageForRealTime);
+
+    // emitEvent(req, ALERT, chat.members, {
+    //     message: `${userToBeRemoved?.username} has been removed from the group`,
+    //     chatId,
+    // });
 
     emitEvent(req, REFETCH_CHATS, allChatMembers);
 
@@ -262,11 +299,24 @@ export const leaveGroup = catchAsyncError(async (req: Request, res: Response, ne
 
     const user = await User.findById(req.user, "username");
     await chat.save();
+    const messageForRealTime = {
+        content: `User ${user?.username} has left the group`,
+        chatId: chatId,
+        message_type: "ACTION",
+        sender: {
+            _id: user?._id,
+            username: user?.username,
+            avatar: user?.avatar,
+        },
+        createdAt: new Date().toISOString(),
+    }
 
-    emitEvent(req, ALERT, chat.members, {
+    emitEvent(req, NEW_MESSAGE, chat.members, {
         chatId,
-        message: `User ${user?.username} has left the group`,
+        message: messageForRealTime,
     });
+
+    await Message.create(messageForRealTime);
 
     return res.status(200).json({
         success: true,
@@ -275,9 +325,11 @@ export const leaveGroup = catchAsyncError(async (req: Request, res: Response, ne
 });
 
 export const sendAttachments = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
-    const { chatId, content = "" } = req.body;
+    const { chatId, caption = "", message_type } = req.body;
 
     const files = req.files || [];
+
+    console.log("body", req.body, chatId, message_type, "files", files)
 
     if (Number(files.length) < 1)
         return next(new ErrorHandler("Please Upload Attachments", 400));
@@ -286,20 +338,23 @@ export const sendAttachments = catchAsyncError(async (req: Request, res: Respons
         return next(new ErrorHandler("Files Can't be more than 5", 400));
 
     const chat = await Chat.findById(chatId);
-    const user = await User.findById(req.user, "username");
+    const user = await User.findById(req.user, "username avatar bio");
 
     if (!chat) return next(new ErrorHandler("Chat not found", 404));
 
     if (!user) return next(new ErrorHandler("User not found", 404));
 
     //   Upload files here
-    const attachments = await uploadFilesToCloudinary({ files: files as any, userId: user?._id });
+    const attachments = await uploadFilesToCloudinary({ files: files as any, userId: user?._id, message_type });
+
+    console.log(attachments)
 
     const messageForDB = {
-        content: content,
         attachments,
+        message_type,
         sender: user._id,
-        chat: chatId,
+        chatId: chatId,
+        caption: caption
     };
 
     const messageForRealTime = {
@@ -307,6 +362,7 @@ export const sendAttachments = catchAsyncError(async (req: Request, res: Respons
         sender: {
             _id: user._id,
             username: user.username,
+            avatar: user.avatar,
         },
     };
 
@@ -322,6 +378,7 @@ export const sendAttachments = catchAsyncError(async (req: Request, res: Respons
     return res.status(200).json({
         success: true,
         message,
+        response: `${message_type} send successfully.`
     });
 });
 
@@ -329,7 +386,7 @@ export const sendAttachments = catchAsyncError(async (req: Request, res: Respons
 export const getChatDetails = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     if (req.query.populate === "true") {
         const chat = await Chat.findById(req.params.id)
-            .populate("members.user", "username avatar")
+            .populate("members.user", "username avatar bio")
             .lean();
 
         if (!chat) return next(new ErrorHandler("Chat not found", 404));
@@ -363,7 +420,7 @@ export const renameGroup = catchAsyncError(async (req: Request, res: Response, n
 
     if (chat.creator.toString() !== req.user?.toString())
         return next(
-            new ErrorHandler("You are not allowed to rename the group", 403)
+            new ErrorHandler("Only Group Admin are allowed to rename the group", 403)
         );
 
     chat.name = name;
@@ -434,7 +491,7 @@ export const getMessages = catchAsyncError(async (req: Request, res: Response, n
 
     console.log(chatId, page);
 
-    const resultPerPage = 20;
+    const resultPerPage = 100;
     const skip = (Number(page) - 1) * resultPerPage;
 
     const chat = await Chat.findById(chatId);
@@ -450,7 +507,7 @@ export const getMessages = catchAsyncError(async (req: Request, res: Response, n
         .sort({ createdAt: 1 })
         .skip(skip)
         .limit(resultPerPage)
-        .populate("sender", "username avatar _id")
+        .populate("sender", "username avatar _id bio")
         .lean();
     const totalMessagesCount = await Message.countDocuments({ chatId: chatId });
 
@@ -458,7 +515,7 @@ export const getMessages = catchAsyncError(async (req: Request, res: Response, n
 
     return res.status(200).json({
         success: true,
-        messages: messages.reverse(),
+        messages: messages,
         totalPages,
     });
 });
@@ -605,7 +662,7 @@ export const getMyPinnedChats = catchAsyncError(async (req: Request, res: Respon
         "members.user": req.user,
         "members.isPinned": true
     })
-        .populate({ path: "members.user", select: "username avatar" })
+        .populate({ path: "members.user", select: "username avatar bio" })
         .exec();
 
 
@@ -640,7 +697,7 @@ export const getMyArchievedChats = catchAsyncError(async (req: Request, res: Res
         "members.user": req.user,
         "members.isArchieved": true
     })
-        .populate({ path: "members.user", select: "username avatar" })
+        .populate({ path: "members.user", select: "username avatar bio" })
         .exec();
 
 
@@ -675,7 +732,7 @@ export const getMyMutedChats = catchAsyncError(async (req: Request, res: Respons
         "members.user": req.user,
         "members.isMuted": true
     })
-        .populate({ path: "members.user", select: "username avatar" })
+        .populate({ path: "members.user", select: "username avatar bio" })
         .exec();
 
 
@@ -711,7 +768,7 @@ export const getMyBlockedChats = catchAsyncError(async (req: Request, res: Respo
         "members.isBlocked": true,
         "groupChat": false,
     })
-        .populate({ path: "members.user", select: "username avatar" })
+        .populate({ path: "members.user", select: "username avatar bio" })
         .exec();
 
 
