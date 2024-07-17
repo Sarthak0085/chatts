@@ -25,6 +25,8 @@ type UploadFile = {
   email?: string;
   isAvatar?: boolean;
   userId?: string;
+  caption?: string;
+  message_type?: string;
 }
 
 export const emitEvent = (req: Request, event: string, users: any, data?: any) => {
@@ -33,9 +35,9 @@ export const emitEvent = (req: Request, event: string, users: any, data?: any) =
   io.to(usersSockets).emit(event, data);
 }
 
-export const uploadFilesToCloudinary = async ({ files, username, email, userId, isAvatar }: UploadFile): Promise<GetCloudinaryResult[] | undefined> => {
+export const uploadFilesToCloudinary = async ({ files, username, email, userId, isAvatar, message_type }: UploadFile): Promise<GetCloudinaryResult[] | undefined> => {
   const uploadPromises = files.map((file) => {
-    const folder = isAvatar ? `chatss/avatars/${username}-${email}` : `chats/chat/${userId}`;
+    const folder = isAvatar ? `chatss/avatars/${username}-${email}` : `chats/chat/${userId}-${message_type}`;
     return new Promise((resolve, reject) => {
       cloudinary.uploader.upload(
         getBase64(file),
@@ -54,11 +56,13 @@ export const uploadFilesToCloudinary = async ({ files, username, email, userId, 
   try {
     //@ts-ignore
     const results: CloudinaryResult[] = await Promise.all(uploadPromises);
+    console.log(results);
 
     const formattedResults = results.map((result) => ({
       public_id: result.public_id,
       url: result.secure_url,
     })) as GetCloudinaryResult[];
+    console.log(formattedResults);
     return formattedResults;
   } catch (err: any) {
     new ErrorHandler("Error uploading files to cloudinary", 400);
